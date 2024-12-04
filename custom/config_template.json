@@ -45,6 +45,8 @@
 
         "entropy_skipping_ratio": 0.0,
         "enable_entropy_skipping_mask": false,
+        "entropy_skipping_mask_threshold": 0.0,
+        "enable_entropy_skipping_in_place": false,
 
         "resolutions_list": [18, 24, 33, 44, 59, 80, 108, 148, 201, 275, 376, 514],
         "resolutions_list_2D": [130, 258, 514, 1026],
@@ -68,6 +70,8 @@
 
         "entropy_skipping_ratio": 0.0,
         "enable_entropy_skipping_mask": false,
+        "entropy_skipping_mask_threshold": 0.0,
+        "enable_entropy_skipping_in_place": false,
 
         "resolutions_list": [18, 24, 33, 44, 59, 80, 108, 148, 201, 275, 376, 514],
         "resolutions_list_2D": [130, 258, 514, 1026],

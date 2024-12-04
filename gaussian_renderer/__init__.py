@@ -95,7 +95,7 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 feat_context_A = pc.get_grid_mlp(feat_context)
                 if pc.enable_entropy_skipping_mask:
                     entropy_mask = pc.get_mask_mlp(feat_context)
-                    entropy_mask = entropy_mask > 0.5
+                    entropy_mask = entropy_mask > pc.entropy_skipping_mask_threshold
                 else:
                     entropy_mask = None
                 mean, scale, mean_scaling, scale_scaling, mean_offsets, scale_offsets, Q_feat_adj, Q_scaling_adj, Q_offsets_adj = \
@@ -115,7 +115,8 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 grid_offsets_chosen = grid_offsets[choose_idx].view(-1, 3*pc.n_offsets)
                 mean = mean[choose_idx]
                 scale = scale[choose_idx]
-                entropy_mask = entropy_mask[choose_idx]
+                if pc.enable_entropy_skipping_mask:
+                    entropy_mask = entropy_mask[choose_idx]
                 mean_scaling = mean_scaling[choose_idx]
                 scale_scaling = scale_scaling[choose_idx]
                 mean_offsets = mean_offsets[choose_idx]
@@ -124,13 +125,10 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 Q_scaling = Q_scaling[choose_idx]
                 Q_offsets = Q_offsets[choose_idx]
                 # bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
-                raw_feat_chosen = feat_chosen.clone()
+                bit_feat_raw = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                 bit_feat = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask)
-
-                mse, be, ac = evaluate_entropy_skipping(raw_feat_chosen, feat_chosen, mean, scale)
-                record(['ES', 'MSE'], mse)
-                record(['ES', 'Bit Edge'], be)
-                record(['ES', 'Prediction Accuracy'], ac)
+                record(['GNG', 'bit_feat_raw'], bit_feat_raw.mean().item())
+                record(['GNG', 'bit_feat'], bit_feat.mean().item())
                 bit_scaling = entropy_skipping(grid_scaling_chosen, mean_scaling, scale_scaling, Q_scaling, pc.get_scaling.mean())
                 bit_offsets = entropy_skipping(grid_offsets_chosen, mean_offsets, scale_offsets, Q_offsets, pc._offset.mean())
                 bit_per_feat_param = torch.sum(bit_feat) / bit_feat.numel()

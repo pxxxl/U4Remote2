@@ -51,6 +51,7 @@ from utils.encodings import anchor_round_digits, Q_anchor, encoder_anchor, get_b
 import base_config
 from custom.recorder import record, RecordEntry, init_recorder
 import custom.config_check
+from custom.model import conduct_entropy_skipping_in_place
 
 # torch.set_num_threads(32)
 # lpips_fn = lpips.LPIPS(net='vgg').to('cuda')
@@ -110,7 +111,7 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
         mode = "I_frame"
     )
     gaussians.set_steps(args_param.step_flag1, args_param.step_flag2, args_param.step_flag3)
-    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio, args_param.enable_entropy_skipping_mask)
+    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio, args_param.enable_entropy_skipping_mask, args_param.entropy_skipping_mask_threshold, args_param.enable_entropy_skipping_in_place)
 
     if init:
         scene = Scene(dataset, gaussians, ply_path=ply_path)
@@ -152,6 +153,12 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
             pipe.debug = True
 
         voxel_visible_mask = prefilter_voxel(viewpoint_cam, gaussians, pipe, background)
+        
+        with torch.no_grad():
+            # entropy skipping
+            if gaussians.enable_entropy_skipping_in_place:
+                conduct_entropy_skipping_in_place(gaussians, voxel_visible_mask, is_training=gaussians.get_color_mlp.training, step=iteration)
+
         # voxel_visible_mask:bool = radii_pure > 0: 应该是[N_anchor]?
         retain_grad = (iteration < opt.update_until and iteration >= 0)
         render_pkg = render(viewpoint_cam, gaussians, pipe, background, visible_mask=voxel_visible_mask, retain_grad=retain_grad, step=iteration)

@@ -1,7 +1,7 @@
-outputs_avs/
 submodules/
 __pycache__/
 *.pyc
 configs/
 *.txt
 record/
+output_avs/

@@ -528,9 +528,11 @@ class GaussianModel(nn.Module):
         self.step_flag2 = flag_2
         self.step_flag3 = flag_3
     
-    def set_entropy_skipping(self, entropy_skipping_ratio, enable_entropy_skipping_mask):
+    def set_entropy_skipping(self, entropy_skipping_ratio, enable_entropy_skipping_mask, entropy_skipping_mask_threshold, enable_entropy_skipping_in_place):
         self.entropy_skipping_ratio = entropy_skipping_ratio
         self.enable_entropy_skipping_mask = enable_entropy_skipping_mask
+        self.entropy_skipping_mask_threshold = entropy_skipping_mask_threshold
+        self.enable_entropy_skipping_in_place = enable_entropy_skipping_in_place
     
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
@@ -1171,7 +1173,7 @@ class GaussianModel(nn.Module):
         
         if self.enable_entropy_skipping_mask:
             entropy_mask = self.get_mask_mlp(feat_context)
-            entropy_mask = entropy_mask > 0.5
+            entropy_mask = entropy_mask > self.entropy_skipping_mask_threshold
             record(['Estimate final bits', 'Entropy Mask'], entropy_mask.sum().item())
             record(['Estimate final bits', 'Entropy Mask Total'], entropy_mask.numel())
         else:
