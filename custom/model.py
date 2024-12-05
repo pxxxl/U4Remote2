@@ -39,7 +39,10 @@ def entropy_skipping(x, mean, scale, Q=None, x_mean=None, gaussian_skipping_rati
     if gaussian_skipping_ratio > 0.0:
         threshold = torch.quantile(scale, gaussian_skipping_ratio)
         mask_gr = scale <= threshold
-        x = torch.where(mask_gr, mean, x)
+        if inplace:
+            x[:] = torch.where(mask_gr, mean, x)
+        else:
+            x = torch.where(mask_gr, mean, x)
 
     if mask is not None:
         if inplace:
@@ -105,7 +108,8 @@ def conduct_entropy_skipping_in_place(pc, visible_mask=None, is_training=False, 
                 feat_chosen = feat[choose_idx]
                 mean = mean[choose_idx]
                 scale = scale[choose_idx]
-                entropy_mask = entropy_mask[choose_idx]
+                if pc.enable_entropy_skipping_mask:
+                    entropy_mask = entropy_mask[choose_idx]
                 Q_feat = Q_feat[choose_idx]
                 # bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                 raw_feat_chosen = feat_chosen.clone()
