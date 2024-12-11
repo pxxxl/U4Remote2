@@ -268,8 +268,7 @@ class GaussianModel(nn.Module):
         self.mlp_mask = nn.Sequential(
             nn.Linear(self.encoding_xyz.output_dim, feat_dim*2),
             nn.ReLU(True),
-            nn.Linear(feat_dim*2, feat_dim),
-            nn.Sigmoid()
+            nn.Linear(feat_dim*2, feat_dim)
         ).cuda()
 
         self.entropy_gaussian = Entropy_gaussian(Q=1).cuda()
@@ -528,11 +527,16 @@ class GaussianModel(nn.Module):
         self.step_flag2 = flag_2
         self.step_flag3 = flag_3
     
-    def set_entropy_skipping(self, entropy_skipping_ratio, enable_entropy_skipping_mask, entropy_skipping_mask_threshold, enable_entropy_skipping_in_place):
+    def set_entropy_skipping(self, entropy_skipping_ratio, enable_entropy_skipping_mask, entropy_skipping_mask_threshold, enable_entropy_skipping_in_place,
+    enable_STE_entropy_skipping):
+        # check
+        if int(entropy_skipping_ratio != 0.0) + int(enable_entropy_skipping_mask) + int(enable_STE_entropy_skipping) >= 2:
+            raise ValueError("Invalid entropy skipping configuration")
         self.entropy_skipping_ratio = entropy_skipping_ratio
         self.enable_entropy_skipping_mask = enable_entropy_skipping_mask
         self.entropy_skipping_mask_threshold = entropy_skipping_mask_threshold
         self.enable_entropy_skipping_in_place = enable_entropy_skipping_in_place
+        self.enable_STE_entropy_skipping = enable_STE_entropy_skipping
     
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
@@ -1171,12 +1175,21 @@ class GaussianModel(nn.Module):
         mean, scale, mean_scaling, scale_scaling, mean_offsets, scale_offsets, Q_feat_adj, Q_scaling_adj, Q_offsets_adj = \
             torch.split(self.get_grid_mlp(feat_context), split_size_or_sections=[self.feat_dim, self.feat_dim, 6, 6, 3*self.n_offsets, 3*self.n_offsets, 1, 1, 1], dim=-1)  # [N_visible_anchor, 32], [N_visible_anchor, 32]
         
+        sigmoid = nn.Sigmoid()
+        
         if self.enable_entropy_skipping_mask:
             entropy_mask = self.get_mask_mlp(feat_context)
+            entropy_mask = sigmoid(entropy_mask)
             entropy_mask = entropy_mask > self.entropy_skipping_mask_threshold
+            STE_mask = None
             record(['Estimate final bits', 'Entropy Mask'], entropy_mask.sum().item())
             record(['Estimate final bits', 'Entropy Mask Total'], entropy_mask.numel())
+        elif self.enable_STE_entropy_skipping:
+            entropy_mask_hat = self.get_mask_mlp(feat_context)
+            STE_mask = STE_binary.apply(entropy_mask_hat)
+            entropy_mask = None
         else:
+            STE_mask = None
             entropy_mask = None
         
         Q_feat = Q_feat * (1 + torch.tanh(Q_feat_adj))
@@ -1187,7 +1200,7 @@ class GaussianModel(nn.Module):
         offsets = (STE_multistep.apply(_grid_offsets, Q_offsets.unsqueeze(1))).detach()
         offsets = offsets.view(-1, 3*self.n_offsets)
 
-        bit_feat = entropy_skipping(_feat, mean, scale, Q_feat, gaussian_skipping_ratio=self.entropy_skipping_ratio, mask=entropy_mask)
+        bit_feat = entropy_skipping(_feat, mean, scale, Q_feat, gaussian_skipping_ratio=self.entropy_skipping_ratio, mask=entropy_mask, STE_mask=STE_mask)
         bit_scaling = entropy_skipping(grid_scaling, mean_scaling, scale_scaling, Q_scaling)
         bit_offsets = entropy_skipping(offsets, mean_offsets, scale_offsets, Q_offsets)
 

@@ -21,7 +21,7 @@ import math
 from diff_gaussian_rasterization import GaussianRasterizationSettings, GaussianRasterizer
 from scene.gaussian_model import GaussianModel
 from utils.encodings import STE_binary, STE_multistep
-from custom.model import entropy_skipping, evaluate_entropy_skipping
+from custom.model import entropy_skipping, evaluate_entropy_skipping, get_entropy_skipped_feat
 from custom.recorder import record
 
 
@@ -37,6 +37,7 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
     feat = pc._anchor_feat[visible_mask]
     grid_offsets = pc._offset[visible_mask]
     grid_scaling = pc.get_scaling[visible_mask]
+    sigmoid = nn.Sigmoid()
     if pc.mode == 'I_frame':
         bit_per_param = None
         bit_per_feat_param = None
@@ -95,8 +96,17 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 feat_context_A = pc.get_grid_mlp(feat_context)
                 if pc.enable_entropy_skipping_mask:
                     entropy_mask = pc.get_mask_mlp(feat_context)
+                    entropy_mask = sigmoid(entropy_mask)
                     entropy_mask = entropy_mask > pc.entropy_skipping_mask_threshold
+                    print(entropy_mask.sum())
+                    STE_mask = None
+                elif pc.enable_STE_entropy_skipping:
+                    entropy_mask_hat = pc.get_mask_mlp(feat_context)
+                    STE_mask = STE_binary.apply(entropy_mask_hat)
+                    print((STE_mask>0).sum())
+                    entropy_mask = None
                 else:
+                    STE_mask = None
                     entropy_mask = None
                 mean, scale, mean_scaling, scale_scaling, mean_offsets, scale_offsets, Q_feat_adj, Q_scaling_adj, Q_offsets_adj = \
                     torch.split(feat_context_A, split_size_or_sections=[pc.feat_dim, pc.feat_dim, 6, 6, 3*pc.n_offsets, 3*pc.n_offsets, 1, 1, 1], dim=-1)
@@ -106,6 +116,7 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 Q_scaling = Q_scaling * (1 + torch.tanh(Q_scaling_adj))
                 Q_offsets = Q_offsets * (1 + torch.tanh(Q_offsets_adj))
                 feat = feat + torch.empty_like(feat).uniform_(-0.5, 0.5) * Q_feat
+                feat = get_entropy_skipped_feat(feat, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask, STE_mask)
                 grid_scaling = grid_scaling + torch.empty_like(grid_scaling).uniform_(-0.5, 0.5) * Q_scaling
                 grid_offsets = grid_offsets + torch.empty_like(grid_offsets).uniform_(-0.5, 0.5) * Q_offsets.unsqueeze(1)
 
@@ -117,6 +128,8 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 scale = scale[choose_idx]
                 if pc.enable_entropy_skipping_mask:
                     entropy_mask = entropy_mask[choose_idx]
+                if pc.enable_STE_entropy_skipping:
+                    STE_mask = STE_mask[choose_idx]
                 mean_scaling = mean_scaling[choose_idx]
                 scale_scaling = scale_scaling[choose_idx]
                 mean_offsets = mean_offsets[choose_idx]
@@ -126,7 +139,7 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 Q_offsets = Q_offsets[choose_idx]
                 # bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                 bit_feat_raw = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
-                bit_feat = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask)
+                bit_feat = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask, STE_mask)
                 record(['GNG', 'bit_feat_raw'], bit_feat_raw.mean().item())
                 record(['GNG', 'bit_feat'], bit_feat.mean().item())
                 bit_scaling = entropy_skipping(grid_scaling_chosen, mean_scaling, scale_scaling, Q_scaling, pc.get_scaling.mean())

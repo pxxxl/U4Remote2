@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from custom.recorder import record
+from utils.encodings import STE_binary, STE_multistep
 
 class Low_bound(torch.autograd.Function):
     @staticmethod
@@ -21,9 +22,7 @@ class Low_bound(torch.autograd.Function):
         return grad1 * t
 
 
-def entropy_skipping(x, mean, scale, Q=None, x_mean=None, gaussian_skipping_ratio=0.0, mask=None, inplace=False):
-    if gaussian_skipping_ratio != 0.0 and mask is not None:
-        raise ValueError("gaussian_skipping_ratio is 0.0, but mask is not None")
+def entropy_skipping(x, mean, scale, Q=None, x_mean=None, gaussian_skipping_ratio=0.0, mask=None, STE_mask=None, inplace=False):
     if Q is None:
         Q = 1
     if x_mean is None:
@@ -50,6 +49,12 @@ def entropy_skipping(x, mean, scale, Q=None, x_mean=None, gaussian_skipping_rati
         else:
             x = torch.where(mask, mean, x)
 
+    if STE_mask is not None:
+        if inplace:
+            x[:] = x * (STE_mask + 1) / 2 + mean * (1 - STE_mask) / 2
+        else:
+            x = x * (STE_mask + 1) / 2 + mean * (1 - STE_mask) / 2
+
     m1 = torch.distributions.normal.Normal(mean, scale)
     lower = m1.cdf(x - 0.5*Q)
     upper = m1.cdf(x + 0.5*Q)
@@ -57,6 +62,30 @@ def entropy_skipping(x, mean, scale, Q=None, x_mean=None, gaussian_skipping_rati
     likelihood = Low_bound.apply(likelihood)
     bits = -torch.log2(likelihood)
     return bits
+
+
+def get_entropy_skipped_feat(x, mean, scale, Q=None, x_mean=None, gaussian_skipping_ratio=0.0, mask=None, STE_mask=None):
+    if Q is None:
+        Q = 1
+    if x_mean is None:
+        x_mean = x.mean()
+    x_min = x_mean - 15_000 * Q
+    x_max = x_mean + 15_000 * Q
+    x = torch.clamp(x, min=x_min.detach(), max=x_max.detach())
+    scale = torch.clamp(scale, min=1e-9)
+
+    if gaussian_skipping_ratio > 0.0:
+        threshold = torch.quantile(scale, gaussian_skipping_ratio)
+        mask_gr = scale <= threshold
+        x = torch.where(mask_gr, mean, x)
+
+    if mask is not None:
+        x = torch.where(mask, mean, x)
+
+    if STE_mask is not None:
+        x = x * (STE_mask + 1) / 2 + mean * (1 - STE_mask) / 2
+
+    return x
     
 
 def evaluate_entropy_skipping(x_raw, x_skip, mean, scale):
@@ -86,8 +115,7 @@ def conduct_entropy_skipping_in_place(pc, visible_mask=None, is_training=False, 
 
     anchor = pc.get_anchor[visible_mask]
     feat = pc._anchor_feat[visible_mask]
-    grid_offsets = pc._offset[visible_mask]
-    grid_scaling = pc.get_scaling[visible_mask]
+    sigmoid = nn.Sigmoid()
     if pc.mode == 'I_frame':
         if is_training:
             if step > pc.step_flag3:
@@ -95,8 +123,15 @@ def conduct_entropy_skipping_in_place(pc, visible_mask=None, is_training=False, 
                 feat_context_A = pc.get_grid_mlp(feat_context)
                 if pc.enable_entropy_skipping_mask:
                     entropy_mask = pc.get_mask_mlp(feat_context)
+                    entropy_mask = sigmoid(entropy_mask)
                     entropy_mask = entropy_mask > pc.entropy_skipping_mask_threshold
+                    STE_mask = None
+                elif pc.enable_STE_entropy_skipping:
+                    entropy_mask_hat = pc.get_mask_mlp(feat_context)
+                    STE_mask = STE_binary.apply(entropy_mask_hat)
+                    entropy_mask = None
                 else:
+                    STE_mask = None
                     entropy_mask = None
                 mean, scale, mean_scaling, scale_scaling, mean_offsets, scale_offsets, Q_feat_adj, Q_scaling_adj, Q_offsets_adj = \
                     torch.split(feat_context_A, split_size_or_sections=[pc.feat_dim, pc.feat_dim, 6, 6, 3*pc.n_offsets, 3*pc.n_offsets, 1, 1, 1], dim=-1)
@@ -110,10 +145,12 @@ def conduct_entropy_skipping_in_place(pc, visible_mask=None, is_training=False, 
                 scale = scale[choose_idx]
                 if pc.enable_entropy_skipping_mask:
                     entropy_mask = entropy_mask[choose_idx]
+                if pc.enable_STE_entropy_skipping:
+                    STE_mask = STE_mask[choose_idx]
                 Q_feat = Q_feat[choose_idx]
                 # bit_feat = pc.entropy_gaussian.forward(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean())
                 raw_feat_chosen = feat_chosen.clone()
-                bit_feat = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask, inplace=True)
+                bit_feat = entropy_skipping(feat_chosen, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask, STE_mask, inplace=True)
 
                 mse, be, ac = evaluate_entropy_skipping(raw_feat_chosen, feat_chosen, mean, scale)
                 record(['ES', 'MSE'], mse.item())

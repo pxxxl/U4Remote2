@@ -111,7 +111,7 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
         mode = "I_frame"
     )
     gaussians.set_steps(args_param.step_flag1, args_param.step_flag2, args_param.step_flag3)
-    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio, args_param.enable_entropy_skipping_mask, args_param.entropy_skipping_mask_threshold, args_param.enable_entropy_skipping_in_place)
+    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio, args_param.enable_entropy_skipping_mask, args_param.entropy_skipping_mask_threshold, args_param.enable_entropy_skipping_in_place, args_param.enable_STE_entropy_skipping)
 
     if init:
         scene = Scene(dataset, gaussians, ply_path=ply_path)
@@ -153,11 +153,6 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
             pipe.debug = True
 
         voxel_visible_mask = prefilter_voxel(viewpoint_cam, gaussians, pipe, background)
-        
-        with torch.no_grad():
-            # entropy skipping
-            if gaussians.enable_entropy_skipping_in_place:
-                conduct_entropy_skipping_in_place(gaussians, voxel_visible_mask, is_training=gaussians.get_color_mlp.training, step=iteration)
 
         # voxel_visible_mask:bool = radii_pure > 0: 应该是[N_anchor]?
         retain_grad = (iteration < opt.update_until and iteration >= 0)
@@ -236,6 +231,12 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
             if iteration < opt.iterations:
                 gaussians.optimizer.step()
                 gaussians.optimizer.zero_grad(set_to_none = True)
+
+            # entropy skipping
+            voxel_visible_mask = prefilter_voxel(viewpoint_cam, gaussians, pipe, background)
+            if gaussians.enable_entropy_skipping_in_place:
+                conduct_entropy_skipping_in_place(gaussians, voxel_visible_mask, is_training=gaussians.get_color_mlp.training, step=iteration)
+
             if (iteration in checkpoint_iterations):
                 logger.info("\n[ITER {}] Saving Checkpoint".format(iteration))
                 torch.save((gaussians.capture(), iteration), scene.model_path + "/chkpnt" + str(iteration) + ".pth")
