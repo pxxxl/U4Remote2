@@ -98,12 +98,13 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                     entropy_mask = pc.get_mask_mlp(feat_context)
                     entropy_mask = sigmoid(entropy_mask)
                     entropy_mask = entropy_mask > pc.entropy_skipping_mask_threshold
+                    record(['GNG', 'Remain Num'], entropy_mask.sum().item())
                     print(entropy_mask.sum())
                     STE_mask = None
                 elif pc.enable_STE_entropy_skipping:
                     entropy_mask_hat = pc.get_mask_mlp(feat_context)
                     STE_mask = STE_binary.apply(entropy_mask_hat)
-                    print((STE_mask>0).sum())
+                    record(['GNG', 'Remain Num'], (STE_mask>0).sum().item())
                     entropy_mask = None
                 else:
                     STE_mask = None
