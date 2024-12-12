@@ -111,7 +111,7 @@ def training_I_frame(args_param, dataset, opt, pipe, dataset_name, testing_itera
         mode = "I_frame"
     )
     gaussians.set_steps(args_param.step_flag1, args_param.step_flag2, args_param.step_flag3)
-    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio, args_param.enable_entropy_skipping_mask, args_param.entropy_skipping_mask_threshold, args_param.enable_entropy_skipping_in_place, args_param.enable_STE_entropy_skipping)
+    gaussians.set_entropy_skipping(args_param.entropy_skipping_ratio, args_param.enable_entropy_skipping_mask, args_param.entropy_skipping_mask_threshold, args_param.enable_entropy_skipping_in_place, args_param.enable_STE_entropy_skipping, args_param.STE_entropy_skipping_ratio)
 
     if init:
         scene = Scene(dataset, gaussians, ply_path=ply_path)

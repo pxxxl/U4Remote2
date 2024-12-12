@@ -23,6 +23,7 @@ from scene.gaussian_model import GaussianModel
 from utils.encodings import STE_binary, STE_multistep
 from custom.model import entropy_skipping, evaluate_entropy_skipping, get_entropy_skipped_feat
 from custom.recorder import record
+from custom.encodings import STE_binary_with_ratio
 
 
 def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask=None, is_training=False, step=0):
@@ -103,7 +104,7 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                     STE_mask = None
                 elif pc.enable_STE_entropy_skipping:
                     entropy_mask_hat = pc.get_mask_mlp(feat_context)
-                    STE_mask = STE_binary.apply(entropy_mask_hat)
+                    STE_mask = STE_binary_with_ratio.apply(entropy_mask_hat, pc.STE_entropy_skipping_ratio)
                     record(['GNG', 'Remain Num'], (STE_mask>0).sum().item())
                     entropy_mask = None
                 else:
@@ -117,7 +118,6 @@ def generate_neural_gaussians(viewpoint_camera, pc : GaussianModel, visible_mask
                 Q_scaling = Q_scaling * (1 + torch.tanh(Q_scaling_adj))
                 Q_offsets = Q_offsets * (1 + torch.tanh(Q_offsets_adj))
                 feat = feat + torch.empty_like(feat).uniform_(-0.5, 0.5) * Q_feat
-                feat = get_entropy_skipped_feat(feat, mean, scale, Q_feat, pc._anchor_feat.mean(), pc.entropy_skipping_ratio, entropy_mask, STE_mask)
                 grid_scaling = grid_scaling + torch.empty_like(grid_scaling).uniform_(-0.5, 0.5) * Q_scaling
                 grid_offsets = grid_offsets + torch.empty_like(grid_offsets).uniform_(-0.5, 0.5) * Q_offsets.unsqueeze(1)
 

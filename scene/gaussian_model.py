@@ -528,7 +528,7 @@ class GaussianModel(nn.Module):
         self.step_flag3 = flag_3
     
     def set_entropy_skipping(self, entropy_skipping_ratio, enable_entropy_skipping_mask, entropy_skipping_mask_threshold, enable_entropy_skipping_in_place,
-    enable_STE_entropy_skipping):
+    enable_STE_entropy_skipping, STE_entropy_skipping_ratio):
         # check
         if int(entropy_skipping_ratio != 0.0) + int(enable_entropy_skipping_mask) + int(enable_STE_entropy_skipping) >= 2:
             raise ValueError("Invalid entropy skipping configuration")
@@ -537,6 +537,7 @@ class GaussianModel(nn.Module):
         self.entropy_skipping_mask_threshold = entropy_skipping_mask_threshold
         self.enable_entropy_skipping_in_place = enable_entropy_skipping_in_place
         self.enable_STE_entropy_skipping = enable_STE_entropy_skipping
+        self.STE_entropy_skipping_ratio = STE_entropy_skipping_ratio
     
     def training_setup(self, training_args):
         self.percent_dense = training_args.percent_dense
