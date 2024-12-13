@@ -12,7 +12,6 @@ class STE_binary_with_ratio(torch.autograd.Function):
     @staticmethod
     def forward(ctx, input, ratio=0.5):
         ctx.save_for_backward(input)
-        input = torch.clamp(input, min=-1, max=1)
         thres = torch.quantile(input, ratio)
         p = (input >= thres) * 1.0
         n = (input < thres) * -1.0

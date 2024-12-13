@@ -5,3 +5,4 @@ configs/
 *.txt
 record/
 output_avs/
+base_config.py
