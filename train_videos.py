@@ -402,7 +402,7 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                     with torch.no_grad():
                         log_info = scene.gaussians.estimate_final_bits()
                         logger.info(log_info)
-                        record(['Training Report', 'IFinal Bits'], log_info)
+                        # record(['Training Report', 'IFinal Bits'], log_info)
                 if run_codec:  # conduct encoding and decoding
                     with torch.no_grad():
                         bit_stream_path = os.path.join(pre_path_name, f"iteration_{iteration}",'bitstreams')
@@ -411,20 +411,20 @@ def training_report(tb_writer, dataset_name, iteration, Ll1, loss, l1_loss, elap
                             # conduct encoding
                             patched_infos, log_info = scene.gaussians.conduct_encoding(pre_path_name=bit_stream_path)
                             logger.info(log_info)
-                            record(['Training Report', 'IEncoding'], log_info)
+                            # record(['Training Report', 'IEncoding'], log_info)
                             # conduct decoding
                             log_info = scene.gaussians.conduct_decoding(pre_path_name=bit_stream_path, patched_infos=patched_infos)
-                            record(['Training Report', 'IDecoding'], log_info)
+                            # record(['Training Report', 'IDecoding'], log_info)
                             logger.info(log_info)
                         elif mode == "P_frame":
                             # conduct encoding
                             patched_infos, log_info = scene.gaussians.conduct_encoding_for_ntc(pre_path_name=bit_stream_path)
                             logger.info(log_info)
-                            record(['Training Report', 'PEncoding'], log_info)
+                            # record(['Training Report', 'PEncoding'], log_info)
                             # conduct decoding
                             log_info = scene.gaussians.conduct_decoding_for_ntc(pre_path_name=bit_stream_path, patched_infos=patched_infos)
                             logger.info(log_info)
-                            record(['Training Report', 'PDecoding'], log_info)
+                            # record(['Training Report', 'PDecoding'], log_info)
             torch.cuda.empty_cache()
             validation_configs = ({'name': 'test', 'cameras' : scene.getTestCameras()},
                                   {'name': 'train', 'cameras' : [scene.getTrainCameras()[idx % len(scene.getTrainCameras())] for idx in range(5, 30, 5)]})

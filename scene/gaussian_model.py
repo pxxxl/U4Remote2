@@ -1215,6 +1215,13 @@ class GaussianModel(nn.Module):
             bit_hash = hash_embeddings.numel()*32
 
         print(bit_anchor, bit_feat, bit_scaling, bit_offsets, bit_hash)
+        record(["Estimate final bits", "Anchor"], round(bit_anchor/bit2MB_scale, 4))
+        record(["Estimate final bits", "Feat"], round(bit_feat/bit2MB_scale, 4))
+        record(["Estimate final bits", "Scaling"], round(bit_scaling/bit2MB_scale, 4))
+        record(["Estimate final bits", "Offsets"], round(bit_offsets/bit2MB_scale, 4))
+        record(["Estimate final bits", "Hash"], round(bit_hash/bit2MB_scale, 4))
+        record(["Estimate final bits", "MLPs"], round(self.get_mlp_size()[0]/bit2MB_scale, 4))
+        record(["Estimate final bits", "Total"], round((bit_anchor + bit_feat + bit_scaling + bit_offsets + bit_hash + self.get_mlp_size()[0])/bit2MB_scale, 4))
 
         log_info = f"\nEstimated sizes in MB: " \
                    f"anchor {round(bit_anchor/bit2MB_scale, 4)}, " \
@@ -1384,6 +1391,15 @@ class GaussianModel(nn.Module):
         torch.save(self.mlp_color.state_dict(), os.path.join(pre_path_name, 'mlp_color.b'))
         torch.save(self.mlp_grid.state_dict(), os.path.join(pre_path_name, 'mlp_grid.b'))
         torch.save(self.mlp_mask.state_dict(), os.path.join(pre_path_name, 'mlp_mask.b'))
+
+        record(["Conduct encoding", "Anchor"], round(bit_anchor/bit2MB_scale, 4))
+        record(["Conduct encoding", "Feat"], round(bit_feat/bit2MB_scale, 4))
+        record(["Conduct encoding", "Scaling"], round(bit_scaling/bit2MB_scale, 4))
+        record(["Conduct encoding", "Offsets"], round(bit_offsets/bit2MB_scale, 4))
+        record(["Conduct encoding", "Hash"], round(bit_hash/bit2MB_scale, 4))
+        record(["Conduct encoding", "MLPs"], round(self.get_mlp_size()[0]/bit2MB_scale, 4))
+        record(["Conduct encoding", "Total"], round((bit_header + bit_anchor + bit_feat + bit_scaling + bit_offsets + bit_hash + self.get_mlp_size()[0])/bit2MB_scale, 4))
+        record(["Conduct encoding", "EncTime"], round(t2 - t1, 4))
 
         log_info = f"\nEncoded sizes in MB: " \
                    f"header {round(bit_header/bit2MB_scale, 4)}, " \
@@ -1560,6 +1576,8 @@ class GaussianModel(nn.Module):
                 self.encoding_xyz.params = nn.Parameter(hash_embeddings)
 
         print('Parameters are successfully replaced by decoded ones!')
+
+        record(["Conduct decoding", "DecTime"], round(t2 - t1, 4))
 
         log_info = f"\nDecTime {round(t2 - t1, 4)}"
 
